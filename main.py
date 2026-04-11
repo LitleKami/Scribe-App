@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+# Flask imports
 from flask import Flask, render_template, request, url_for, redirect, flash, send_from_directory, abort
 from flask_bootstrap import Bootstrap5
 from flask_sqlalchemy import SQLAlchemy
@@ -15,6 +15,7 @@ from wtforms.validators import DataRequired, URL, Length, Email
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import Integer, String, Boolean, DateTime, Text
 from sqlalchemy import ForeignKey, String, Text, DateTime
+# Other imports
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime as dt
 import os
@@ -28,12 +29,11 @@ bcrypt = Bcrypt()
 class Base(DeclarativeBase):
     pass
 
-db = SQLAlchemy(model_class=Base)
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
+db = SQLAlchemy(app, model_class=Base)
 app.config['CKEDITOR_PKG_TYPE'] = 'full'
 ckeditor = CKEditor(app)
 bootstrap = Bootstrap5(app)
@@ -48,12 +48,12 @@ migrate = Migrate(app, db)
 
 @login_manager.user_loader
 def load_user(user_id):
-    return Users.query.get(int(user_id))
+    return db.session.get(Users, int(user_id))
 
 def admin_required(f):
     @wraps(f)
     def wrap(*args, **kwargs):
-        if not current_user.is_authenticated or current_user.is_admin:
+        if not current_user.is_authenticated or not current_user.is_admin:
             abort(403)
         return f(*args, **kwargs)
     return wrap
@@ -70,11 +70,10 @@ class Users(UserMixin, db.Model):
     comments: Mapped[List["Comment"]] = relationship(back_populates='user', cascade='all, delete-orphan')
 
     def set_password_hash(self, password):
-        self.password_hash = generate_password_hash(password, method='pbkdf2:sha256', salt_length=8)
-
+        self.password_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+    
     def check_password_hash(self, password):
-        return check_password_hash(self.password_hash, password)
-
+        return bcrypt.check_password_hash(self.password_hash, password)
 
 class BlogPost(db.Model):
     __tablename__ = 'blog_post'
@@ -229,7 +228,6 @@ def delete_post(post_id):
 @app.route('/login', methods=['POST', 'GET'])
 def login():
     users = db.session.execute(db.select(Users).order_by(Users.id)).scalars()
-    # print(users.email)
     for user in users:
         print(user.email)
     form = Login()
@@ -256,6 +254,7 @@ def login():
     return render_template("login.html", form=form)
 
 @app.route('/logout')
+@login_required
 def logout():
     logout_user()
     return redirect(url_for('get_all_posts'))
@@ -263,8 +262,7 @@ def logout():
 @app.route('/register', methods=['POST', 'GET'])
 def register():
     user_form = Register()
-
-    # # Check if user already exists
+    # Check if our user already exists
     if request.method == 'POST':
         users = db.session.execute(db.select(Users).order_by(Users.id)).scalars()
         user_email = user_form.email.data
@@ -272,11 +270,6 @@ def register():
         if user_exists:
             flash('Email already taken', 'danger')
             return redirect(url_for('login'))
-
-        # emails = [user.email for user in users]
-        # passwords = [user.password_hash for user in users]
-        # print(emails)
-        # print(passwords)
 
         if user_form.validate_on_submit():
 
@@ -294,24 +287,18 @@ def register():
             print((user.email, user.id) for user in users)
 
             return redirect(url_for('get_all_posts'))
-
     return render_template("register.html", form=user_form)
 
 @app.route('/users', methods=['GET'])
 def get_users():
     users = db.session.execute(db.select(Users).order_by(Users.id)).scalars()
-    emails_1 = [user.email for user in users]
-    # with app.app_context():
-    #     db.session.execute(db.text("DROP TABLE IF EXISTS users"))
-    #     db.session.commit()
-    #     print('Table users deleted')
-    # if db.session.execute(db.select(Users).order_by(Users.id)).scalars():
-    #     users = db.session.execute(db.select(Users).order_by(Users.id)).scalars()
-    #     emails_2 = [user.email for user in users]
-    #     return emails_1, emails_2
+    emails_1 = [user.name for user in users]
     return emails_1
 
+
 @app.route('/delete/user/<user_id>', methods=['POST', 'GET'])
+@login_required
+@admin_required
 def delete_user(user_id):
     user = db.session.query(BlogPost).filter_by(id=user_id).first()
     db.session.delete(user)
@@ -319,14 +306,13 @@ def delete_user(user_id):
     return redirect(url_for('register'))
 
 @app.route("/edit/user/<int:index>", methods=['GET', 'POST'])  # Added int converter
+@login_required
 def edit_user(index):
     user = db.get_or_404(Users, index)
     # Pass the existing post to the form
     user.is_admin = True
     db.session.commit()
     return redirect(url_for("register"))
-
-    return render_template("make-post.html", form=edit_form, is_edit=True)
 
 
 @app.route("/about")
@@ -339,5 +325,5 @@ def contact():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False)
 
