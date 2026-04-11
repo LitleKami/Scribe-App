@@ -1,0 +1,82 @@
+{{ bootstrap.load_css() }}
+{{ bootstrap.load_js() }}
+{% from "bootstrap5/form.html" import render_form as wtf %}
+{{ ckeditor.load() }}
+{{ ckeditor.config(name='comment_text') }}
+
+{% include "header.html" %}
+
+  <!-- Page Header -->
+  <header class="masthead" style="background-image: url('{{post.img_url}}')">
+    <div class="overlay"></div>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+          <div class="post-heading">
+            <h1>{{post.title}}</h1>
+            <h2 class="subheading">{{post.subtitle}}</h2>
+            <span class="meta">Posted by
+              <a href="#">{{post.author}}</a>
+              on {{post.date}}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Post Content -->
+  <article>
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 col-md-10 mx-auto">
+            {{ post.body|safe }}
+          <hr>
+
+            <div class="clearfix">
+            <a class="btn btn-primary float-right" href="{{url_for('edit_post', index=post_id)}}">Edit Post</a>
+            </div>
+
+
+<!--           Comments Area -->
+          <div class="comment-form">
+              <h3>Leave a Comment</h3>
+              <form method="post">
+                  {{ form.hidden_tag() }}
+                  {{ form.comment_text() }}
+                  {{ form.submit() }}
+              </form>
+
+          </div>
+            <hr>
+            <div class="comments-list">
+                <h3>Comments</h3>
+                {% for comment in post.comments %}
+                <div class="comment-box">
+                   <p><strong>{{comment.user.name}}</strong> says:</p>
+                    <p>{{comment.text | safe }}</p>
+                     <small>{{comment.timestamp.strftime('%Y-%m-%d') }}</small>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="col-lg-8 col-md-10 mx-auto comment">
+              <ul class="commentList">
+                <li>
+                    <div class="commenterImage">
+                      <img src="https://pbs.twimg.com/profile_images/744849215675838464/IH0FNIXk.jpg"/>
+                    </div>
+                    <div class="commentText">
+                      <p>Some comment</p>
+                      <span class="date sub-text">comment author name</span>
+                    </div>
+                </li>
+              </ul>
+            </div>
+
+
+          </div>
+      </div>
+    </div>
+  </article>
+
+  <hr>
+{% include "footer.html" %}

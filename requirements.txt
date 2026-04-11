@@ -1,0 +1,7 @@
+fastapi
+uvigorn
+gunicorn
+sqlalchemy
+asyncpg
+jinja2
+python-multipart
