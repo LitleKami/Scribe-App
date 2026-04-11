@@ -10,3 +10,4 @@ Flask-Migrate
 email-validator
 SQLAlchemy
 Werkzeug
+gunicorn
