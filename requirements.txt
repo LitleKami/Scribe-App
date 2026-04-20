@@ -13,4 +13,5 @@ WTForms==3.2.1
 email-validator
 bleach
 gevent
+redis
 
