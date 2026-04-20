@@ -8,13 +8,14 @@ from flask_login import LoginManager, UserMixin, login_required, logout_user, cu
 from flask_ckeditor import CKEditor, CKEditorField
 from flask_bcrypt import Bcrypt
 from flask_migrate import Migrate
+from flask_caching import Cache
 # WTForms imports
 from wtforms import StringField, SubmitField, PasswordField, TextAreaField
 from wtforms.validators import DataRequired, URL, Length, Email
 # Sqlalchemy imports
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import Integer, String, Boolean, DateTime, Text
-from sqlalchemy import ForeignKey, String, Text, DateTime
+from sqlalchemy import ForeignKey, event
 # Other imports
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime as dt
@@ -22,6 +23,7 @@ import os
 from functools import wraps
 from typing import List
 from datetime import datetime
+
 
 ##CONNECT TO DB
 bcrypt = Bcrypt()
@@ -35,8 +37,16 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("SQLALCHEMY_DATABASE_URI"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app, model_class=Base)
 app.config['CKEDITOR_PKG_TYPE'] = 'full'
+# Configuration for Redis
+app.config["CACHE_TYPE"] = "RedisCache"
+app.config["CACHE_REDIS_URL"] = os.environ.get("REDIS_URL")
+app.config["CACHE_DEFAULT_TIMEOUT"] = 300
+
+cache = Cache(app)
+
 ckeditor = CKEditor(app)
 bootstrap = Bootstrap5(app)
+
 #
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -57,6 +67,19 @@ def admin_required(f):
             abort(403)
         return f(*args, **kwargs)
     return wrap
+
+def clear_blog_cache():
+    """Wipes the cache for the home page and individual post views."""
+    # Clear the specific home page cache
+    cache.delete_view('get_all_posts') 
+    
+
+@event.listens_for(BlogPost, 'after_insert')
+@event.listens_for(BlogPost, 'after_update')
+@event.listens_for(BlogPost, 'after_delete')
+def receive_after_flush(mapper, connection, target):
+    clear_blog_cache()
+    
 
 class Users(UserMixin, db.Model):
     __tablename__ = 'users'
@@ -190,6 +213,7 @@ def new_post():
             db.session.add(post)
             db.session.commit()
             print(post_form.title.data)
+            clear_blog_cahe()
             return redirect(url_for('get_all_posts'))
     return render_template("make-post.html", form=post_form, status=stat)
 
@@ -212,6 +236,7 @@ def edit_post(index):
         post.author = edit_form.author.data
         post.body = edit_form.body.data
         db.session.commit()
+        clear_blog_cache()
         return redirect(url_for("show_post", index=post.id))
 
     return render_template("make-post.html", form=edit_form, is_edit=True)
